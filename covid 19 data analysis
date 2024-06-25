@@ -1,0 +1,211 @@
+CREATE TABLE deaths(
+	iso_code VARCHAR(20),	
+	continent VARCHAR(20),
+	location VARCHAR(50),
+	date DATE,	
+	population BIGINT, 
+	total_cases NUMERIC,
+	new_cases NUMERIC,
+	new_cases_smoothed NUMERIC,
+	total_deaths NUMERIC,
+	new_deaths NUMERIC,
+	new_deaths_smoothed NUMERIC,
+	total_cases_per_million NUMERIC,
+	new_cases_per_million NUMERIC,
+	new_cases_smoothed_per_million NUMERIC,
+	total_deaths_per_million NUMERIC,
+	new_deaths_per_million NUMERIC,
+	new_deaths_smoothed_per_million NUMERIC,
+	reproduction_rate NUMERIC,
+	icu_patients NUMERIC,
+	icu_patients_per_million NUMERIC,
+	hosp_patients NUMERIC,
+	hosp_patients_per_million NUMERIC,
+	weekly_icu_admissions NUMERIC,
+	weekly_icu_admissions_per_million NUMERIC,
+	weekly_hosp_admissions NUMERIC,
+	weekly_hosp_admissions_per_million NUMERIC,
+	new_tests NUMERIC,
+	total_tests NUMERIC,
+	total_tests_per_thousand NUMERIC,
+	new_tests_per_thousand NUMERIC,
+	new_tests_smoothed NUMERIC,
+	new_tests_smoothed_per_thousand NUMERIC,
+	positive_rate NUMERIC,
+	tests_per_case NUMERIC,
+	tests_units VARCHAR(20)
+)
+
+CREATE TABLE vaccinations(
+	iso_code VARCHAR(20),	
+	continent VARCHAR(20),
+	location VARCHAR(50),
+	date DATE,
+	total_vaccinations NUMERIC,
+	people_vaccinated NUMERIC,
+	people_fully_vaccinated	NUMERIC,
+	new_vaccinations NUMERIC,
+	new_vaccinations_smoothed NUMERIC,
+	total_vaccinations_per_hundred NUMERIC,
+	people_vaccinated_per_hundred NUMERIC,
+	people_fully_vaccinated_per_hundred NUMERIC,
+	new_vaccinations_smoothed_per_million NUMERIC,
+	stringency_index NUMERIC,
+	population_density NUMERIC,
+	median_age NUMERIC,
+	aged_65_older NUMERIC,
+	aged_70_older NUMERIC,
+	gdp_per_capita NUMERIC,
+	extreme_poverty NUMERIC,
+	cardiovasc_death_rate NUMERIC,
+	diabetes_prevalence NUMERIC,
+	female_smokers NUMERIC,
+	male_smokers NUMERIC,
+	handwashing_facilities NUMERIC,
+	hospital_beds_per_thousand NUMERIC,
+	life_expectancy NUMERIC,
+	human_development_index NUMERIC)
+
+--Copy data from .csv files into the tables
+COPY deaths(iso_code, continent, location, date, population, total_cases, new_cases,	
+new_cases_smoothed, total_deaths, new_deaths, new_deaths_smoothed, total_cases_per_million,	
+new_cases_per_million, new_cases_smoothed_per_million, total_deaths_per_million, new_deaths_per_million,	
+new_deaths_smoothed_per_million, reproduction_rate, icu_patients, icu_patients_per_million, hosp_patients,	
+hosp_patients_per_million, weekly_icu_admissions, weekly_icu_admissions_per_million, weekly_hosp_admissions,	
+weekly_hosp_admissions_per_million, new_tests, total_tests, total_tests_per_thousand, new_tests_per_thousand,	
+new_tests_smoothed, new_tests_smoothed_per_thousand, positive_rate, tests_per_case,	tests_units)
+FROM 'C:\Users\SUMANA\Downloads\covid_deaths.csv'
+DELIMITER ','
+CSV HEADER
+
+COPY vaccinations(iso_code, continent, location, date, total_vaccinations,people_vaccinated,
+people_fully_vaccinated,new_vaccinations,new_vaccinations_smoothed,total_vaccinations_per_hundred,
+people_vaccinated_per_hundred,people_fully_vaccinated_per_hundred,new_vaccinations_smoothed_per_million,
+stringency_index,population_density,median_age,aged_65_older,aged_70_older,gdp_per_capita,extreme_poverty,
+cardiovasc_death_rate,diabetes_prevalence,female_smokers,male_smokers,handwashing_facilities,
+hospital_beds_per_thousand,life_expectancy,human_development_index)
+FROM 'C:\Users\SUMANA\Downloads\covid_vaccinations.csv'
+DELIMITER ','
+CSV HEADER
+
+--Checking if the data import was successful
+SELECT * FROM public.deaths
+SELECT * FROM public.vaccinations
+
+--DATA EXPLORATION
+-- Looking at the total cases vs population
+
+-- Looking at the total cases vs total deaths
+-- Shows the likelihood of dying if one contracted Covid in their country
+SELECT location,date,total_cases,total_deaths, (total_deaths/total_cases)*100 as death_rate
+FROM public.deaths
+WHERE continent IS NOT NULL
+ORDER BY 1,2
+
+SELECT location,date,total_cases,total_deaths, (total_deaths/total_cases)*100 as death_rate
+FROM public.deaths
+WHERE location = 'India' -- You can give any other country
+and continent IS NOT NULL
+ORDER BY 2
+
+--Looking at total cases per population
+SELECT location,date,population,total_cases, (total_cases/population)*100 as infection_rate
+FROM public.deaths
+WHERE continent IS NOT NULL
+ORDER BY 1,2
+
+SELECT location,date,population,total_cases, (total_cases/population)*100 as infection_rate
+FROM public.deaths
+WHERE location = 'India' -- You can give any other country
+and continent IS NOT NULL
+ORDER BY 2
+
+--Looking at countries with the highest infection rate compared to population
+SELECT location,population, max(total_cases) as highest_case_count, 
+max(total_cases/population)*100 as highest_infection_rate
+FROM public.deaths
+WHERE continent IS NOT NULL
+GROUP BY 1,2
+ORDER BY highest_infection_rate desc NULLS LAST
+
+--Looking at countries with the highest death count compared to population
+SELECT location,population, max(total_deaths) as highest_death_count, 
+max(total_deaths/population)*100 as death_rate_per_population
+FROM public.deaths
+WHERE continent IS NOT NULL
+GROUP BY 1,2
+ORDER BY highest_death_count desc NULLS LAST
+
+--Continent-wise analysis
+SELECT continent, sum(new_cases) as total_case_count,
+sum(new_deaths) as total_death_count 
+FROM public.deaths
+WHERE continent IS NOT NULL
+GROUP BY 1
+ORDER BY total_death_count desc 
+
+-- Global Numbers
+SELECT date, sum(new_cases) as total_case_count,
+sum(new_deaths) as total_death_count 
+FROM public.deaths
+WHERE continent IS NOT NULL
+GROUP BY 1
+ORDER BY 1
+
+SELECT sum(new_cases) as total_case_count, sum(new_deaths) as total_death_count 
+FROM public.deaths
+WHERE continent IS NOT NULL
+
+--Join the deaths table with the vaccinations table
+SELECT * 
+FROM public.deaths dea JOIN public.vaccinations vac
+ON dea.location = vac.location and dea.date = vac.date
+
+-- Looking at total_population vs vaccination
+-- Using CTE
+WITH PopVsVac(continent, location, date, population, new_cases, new_vaccinations)
+as
+(SELECT dea.continent, dea.location, dea.date, dea.population, dea.new_cases, vac.new_vaccinations,
+SUM(vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location, dea.date)
+as cumulative_vaccination
+FROM public.deaths dea JOIN public.vaccinations vac
+ON dea.location = vac.location and dea.date = vac.date
+WHERE dea.continent IS NOT NULL
+)
+SELECT *, (cumulative_vaccination/population)*100 as cumulative_vac_percent
+FROM PopVsVac
+
+-- Using a Temp table
+DROP TABLE IF EXISTS percent_pop_vaccinated
+
+CREATE TEMPORARY TABLE percent_pop_vaccinated(
+continent VARCHAR(50),
+location VARCHAR(50), 
+date DATE,
+population BIGINT,
+new_cases NUMERIC,
+new_vaccinations NUMERIC,
+cumulative_vaccinations NUMERIC
+)
+
+
+INSERT INTO percent_pop_vaccinated
+SELECT dea.continent, dea.location, dea.date, dea.population, dea.new_cases, vac.new_vaccinations,
+SUM(vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location, dea.date)
+as cumulative_vaccinations
+FROM public.deaths dea JOIN public.vaccinations vac
+ON dea.location = vac.location and dea.date = vac.date
+WHERE dea.continent IS NOT NULL
+
+SELECT *, (cumulative_vaccinations/population)*100 as cumulative_vac_percent
+FROM percent_pop_vaccinated
+
+--Creating a view for later visualizations
+
+CREATE VIEW percent_pop_vaccinated as
+SELECT dea.continent, dea.location, dea.date, dea.population, dea.new_cases, vac.new_vaccinations,
+SUM(vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location, dea.date)
+as cumulative_vaccinations
+FROM public.deaths dea JOIN public.vaccinations vac
+ON dea.location = vac.location and dea.date = vac.date
+WHERE dea.continent IS NOT NULL
